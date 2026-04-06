@@ -136,15 +136,6 @@ bool rhhashmap_reserve(rhhashmap_t *map, size_t cap) {
 }
 
 bool rhhashmap_insert(rhhashmap_t *map, const char *key, const void *value, const size_t value_size) {
-    if ((double) (map->len + 1) / (double) map->cap > RHHASHMAP_LOAD_FACTOR) {
-        if (map->cap >= RHHASHMAP_MAX_CAPACITY) {
-            return false;
-        }
-        if (!resize(map, map->cap * 2)) {
-            return false;
-        }
-    }
-
     const size_t key_size = strlen(key) + 1;
     char *key_owned = malloc(key_size);
     if (!key_owned) {
@@ -160,6 +151,13 @@ bool rhhashmap_insert(rhhashmap_t *map, const char *key, const void *value, cons
     memcpy(value_owned, value, value_size);
 
     insert(map, key_owned, value_owned);
+    if ((double) map->len / (double) map->cap > RHHASHMAP_LOAD_FACTOR) {
+        if (map->cap >= RHHASHMAP_MAX_CAPACITY || !resize(map, map->cap * 2)) {
+            rhhashmap_remove(map, key);
+            return false;
+        }
+    }
+
     return true;
 }
 
