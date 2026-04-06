@@ -6,43 +6,33 @@
 #include <string.h>
 
 static void insert(rhhashmap_t *map, char *key, void *value) {
-    int psl = 0;
+    rhhashmap_entry_t to_insert = {key, value, 0};
     size_t i = hash(key, map->cap);
 
     while (true) {
         rhhashmap_entry_t *entry = &map->table[i];
 
         if (!entry->key) {
-            entry->key = key;
-            entry->value = value;
-            entry->psl = psl;
+            *entry = to_insert;
             map->len++;
             return;
         }
 
-        if (strcmp(entry->key, key) == 0) {
+        if (strcmp(entry->key, to_insert.key) == 0) {
             free(entry->value);
-            entry->value = value;
-            free(key);
+            entry->value = to_insert.value;
+            free(to_insert.key);
             return;
         }
 
-        if (psl > entry->psl) {
-            char *tmp_k = entry->key;
-            void *tmp_v = entry->value;
-            const int tmp_psl = entry->psl;
-
-            entry->key = key;
-            entry->value = value;
-            entry->psl = psl;
-
-            key = tmp_k;
-            value = tmp_v;
-            psl = tmp_psl;
+        if (to_insert.psl > entry->psl) {
+            const rhhashmap_entry_t tmp = *entry;
+            *entry = to_insert;
+            to_insert = tmp;
         }
 
         i = (i + 1) % map->cap;
-        psl++;
+        to_insert.psl++;
     }
 }
 
