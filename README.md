@@ -13,7 +13,7 @@ string keys and generic values, providing efficient insertion, retrieval, and re
 - **Manual Capacity Control**: Pre-allocate memory using `rhhashmap_create_with_capacity` or `rhhashmap_reserve` to
   minimize reallocations.
 - **Typed Macros**: Helper macros for simplified insertion and retrieval of typed values.
-- **Comprehensive API**: Includes iteration, removal, clearing, and capacity management functions.
+- **Comprehensive API**: Includes insert, retrival, removal, clearing, and iteration functions.
 
 ## Building and Installation
 
@@ -67,7 +67,7 @@ int main() {
     }
 
     // Iterate over all entries
-    // rhhashmap_foreach(&map, my_callback, NULL);
+    rhhashmap_foreach(&map, my_callback, NULL);
 
     // Clean up
     rhhashmap_destroy(&map);
@@ -80,18 +80,18 @@ int main() {
 ### Initialization & Cleanup
 
 - `bool rhhashmap_create(rhhashmap_t *map)`: Initializes a new hash map.
-- `bool rhhashmap_create_with_capacity(rhhashmap_t *map, size_t cap)`: Initializes a hash map with a specific minimum
+- `bool rhhashmap_create_with_capacity(rhhashmap_t *map, size_t cap)`: Initializes a hash map with at least `cap`
   capacity.
 - `void rhhashmap_destroy(const rhhashmap_t *map)`: Frees all resources associated with the map.
 
 ### Operations
 
-- `bool rhhashmap_reserve(rhhashmap_t *map, size_t cap)`: Reserves capacity for at least `cap` elements.
+- `bool rhhashmap_reserve(rhhashmap_t *map, size_t cap)`: Reserves at least `cap` capacity.
 - `bool rhhashmap_insert(rhhashmap_t *map, const char *key, const void *value, size_t value_size)`: Inserts or updates a
   value.
 - `bool rhhashmap_get(void *out, size_t out_size, const rhhashmap_t *map, const char *key)`: Retrieves a value by key.
 - `bool rhhashmap_remove(rhhashmap_t *map, const char *key)`: Removes a key-value pair.
-- `void rhhashmap_clear(rhhashmap_t *map)`: Removes all entries from the map without deallocating memory.
+- `void rhhashmap_clear(rhhashmap_t *map)`: Removes all entries from the map.
 - `void rhhashmap_foreach(const rhhashmap_t *map, rhhashmap_callback_t callback, void *ctx)`: Iterates over all entries
   with optional user context.
 
