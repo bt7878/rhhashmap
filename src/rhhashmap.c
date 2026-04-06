@@ -1,9 +1,19 @@
 #include "rhhashmap.h"
 #include "hash.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+static size_t next_pow2(size_t n) {
+    n--;
+    for (size_t i = 1; i < sizeof(size_t) * CHAR_BIT; i <<= 1) {
+        n |= n >> i;
+    }
+
+    return n + 1;
+}
 
 static void insert(rhhashmap_t *map, char *key, void *value) {
     rhhashmap_entry_t to_insert = {key, value, 0};
@@ -56,9 +66,25 @@ static bool get_index(size_t *out, const rhhashmap_t *map, const char *key) {
     }
 }
 
-static bool resize(rhhashmap_t *map) {
-    const size_t new_cap = map->cap * 2;
-    rhhashmap_entry_t *new_table = calloc(new_cap, sizeof(rhhashmap_entry_t));
+static bool create(rhhashmap_t *map, const size_t cap) {
+    rhhashmap_entry_t *table = calloc(cap, sizeof(rhhashmap_entry_t));
+    if (!table) {
+        return false;
+    }
+
+    map->table = table;
+    map->len = 0;
+    map->cap = cap;
+
+    return true;
+}
+
+static bool resize(rhhashmap_t *map, const size_t cap) {
+    if (cap <= map->cap) {
+        return true;
+    }
+
+    rhhashmap_entry_t *new_table = calloc(cap, sizeof(rhhashmap_entry_t));
     if (!new_table) {
         return false;
     }
@@ -67,7 +93,7 @@ static bool resize(rhhashmap_t *map) {
     const size_t old_cap = map->cap;
     map->table = new_table;
     map->len = 0;
-    map->cap = new_cap;
+    map->cap = cap;
 
     for (size_t i = 0; i < old_cap; i++) {
         if (old_table[i].key) {
@@ -80,16 +106,16 @@ static bool resize(rhhashmap_t *map) {
 }
 
 bool rhhashmap_create(rhhashmap_t *map) {
-    rhhashmap_entry_t *table = calloc(RHHASHMAP_MIN_CAPACITY, sizeof(rhhashmap_entry_t));
-    if (!table) {
+    return create(map, RHHASHMAP_MIN_CAPACITY);
+}
+
+bool rhhashmap_create_with_capacity(rhhashmap_t *map, size_t cap) {
+    if (cap > RHHASHMAP_MAX_CAPACITY) {
         return false;
     }
+    cap = cap < RHHASHMAP_MIN_CAPACITY ? RHHASHMAP_MIN_CAPACITY : next_pow2(cap);
 
-    map->table = table;
-    map->len = 0;
-    map->cap = RHHASHMAP_MIN_CAPACITY;
-
-    return true;
+    return create(map, cap);
 }
 
 void rhhashmap_destroy(const rhhashmap_t *map) {
@@ -100,9 +126,21 @@ void rhhashmap_destroy(const rhhashmap_t *map) {
     free(map->table);
 }
 
+bool rhhashmap_reserve(rhhashmap_t *map, size_t cap) {
+    if (cap > RHHASHMAP_MAX_CAPACITY) {
+        return false;
+    }
+    cap = cap < RHHASHMAP_MIN_CAPACITY ? RHHASHMAP_MIN_CAPACITY : next_pow2(cap);
+
+    return resize(map, cap);
+}
+
 bool rhhashmap_insert(rhhashmap_t *map, const char *key, const void *value, const size_t value_size) {
     if ((double) (map->len + 1) / (double) map->cap > RHHASHMAP_LOAD_FACTOR) {
-        if (!resize(map)) {
+        if (map->cap >= RHHASHMAP_MAX_CAPACITY) {
+            return false;
+        }
+        if (!resize(map, map->cap * 2)) {
             return false;
         }
     }
@@ -159,6 +197,15 @@ bool rhhashmap_remove(rhhashmap_t *map, const char *key) {
         cur->psl -= 1;
         i = next_i;
     }
+}
+
+void rhhashmap_clear(rhhashmap_t *map) {
+    for (size_t i = 0; i < map->cap; i++) {
+        free(map->table[i].key);
+        free(map->table[i].value);
+        map->table[i] = (rhhashmap_entry_t){0};
+    }
+    map->len = 0;
 }
 
 void rhhashmap_foreach(const rhhashmap_t *map, const rhhashmap_callback_t callback, void *ctx) {

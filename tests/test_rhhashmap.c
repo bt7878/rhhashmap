@@ -17,6 +17,99 @@ static void test_rhhashmap_create_destroy(void **state) {
     rhhashmap_destroy(&map);
 }
 
+static void test_rhhashmap_create_with_capacity_min_clamp(void **state) {
+    (void) state;
+    rhhashmap_t map;
+
+    // Below minimum capacity should clamp to RHHASHMAP_MIN_CAPACITY (16)
+    assert_true(rhhashmap_create_with_capacity(&map, 1));
+    assert_int_equal(map.cap, RHHASHMAP_MIN_CAPACITY);
+    rhhashmap_destroy(&map);
+}
+
+static void test_rhhashmap_create_with_capacity_pow2_rounding(void **state) {
+    (void) state;
+    rhhashmap_t map;
+
+    // Should round up to next power of 2
+    assert_true(rhhashmap_create_with_capacity(&map, 20));
+    assert_int_equal(map.cap, 32);
+    rhhashmap_destroy(&map);
+}
+
+static void test_rhhashmap_create_with_capacity_exact_pow2(void **state) {
+    (void) state;
+    rhhashmap_t map;
+
+    // Exact power of 2
+    assert_true(rhhashmap_create_with_capacity(&map, 64));
+    assert_int_equal(map.cap, 64);
+    rhhashmap_destroy(&map);
+}
+
+static void test_rhhashmap_create_with_capacity_exceed_max(void **state) {
+    (void) state;
+    rhhashmap_t map;
+
+    // Above maximum capacity
+    assert_false(rhhashmap_create_with_capacity(&map, RHHASHMAP_MAX_CAPACITY + 1));
+}
+
+static void test_rhhashmap_reserve_increase(void **state) {
+    (void) state;
+    rhhashmap_t map;
+    assert_true(rhhashmap_create(&map));
+    assert_int_equal(map.cap, RHHASHMAP_MIN_CAPACITY);
+
+    // Reserving more than current capacity
+    assert_true(rhhashmap_reserve(&map, 100));
+    assert_int_equal(map.cap, 128); // Next power of 2 for 100
+
+    rhhashmap_destroy(&map);
+}
+
+static void test_rhhashmap_reserve_smaller_ignored(void **state) {
+    (void) state;
+    rhhashmap_t map;
+    assert_true(rhhashmap_create(&map));
+    assert_true(rhhashmap_reserve(&map, 128));
+
+    // Reserving less than current capacity (should do nothing and return true)
+    assert_true(rhhashmap_reserve(&map, 64));
+    assert_int_equal(map.cap, 128);
+
+    rhhashmap_destroy(&map);
+}
+
+static void test_rhhashmap_reserve_with_data(void **state) {
+    (void) state;
+    rhhashmap_t map;
+    assert_true(rhhashmap_create(&map));
+
+    // Reserve with data inside
+    const int val = 42;
+    assert_true(rhhashmap_insert_typed(&map, "key", val));
+    assert_true(rhhashmap_reserve(&map, 200));
+    assert_int_equal(map.cap, 256);
+    assert_int_equal(map.len, 1);
+    int out;
+    assert_true(rhhashmap_get_typed(&out, &map, "key"));
+    assert_int_equal(out, 42);
+
+    rhhashmap_destroy(&map);
+}
+
+static void test_rhhashmap_reserve_exceed_max(void **state) {
+    (void) state;
+    rhhashmap_t map;
+    assert_true(rhhashmap_create(&map));
+
+    // Above maximum capacity
+    assert_false(rhhashmap_reserve(&map, RHHASHMAP_MAX_CAPACITY + 1));
+
+    rhhashmap_destroy(&map);
+}
+
 static void test_rhhashmap_insert_get_basic(void **state) {
     (void) state;
     rhhashmap_t map;
@@ -183,6 +276,54 @@ static void test_rhhashmap_large_insert_remove(void **state) {
     rhhashmap_destroy(&map);
 }
 
+static void test_rhhashmap_clear_with_data(void **state) {
+    (void) state;
+    rhhashmap_t map;
+    assert_true(rhhashmap_create(&map));
+
+    // Insert some elements
+    const int n = 10;
+    for (int i = 0; i < n; i++) {
+        char key[16];
+        snprintf(key, sizeof(key), "key_%d", i);
+        rhhashmap_insert_typed(&map, key, i);
+    }
+    assert_int_equal(map.len, n);
+    size_t cap_before = map.cap;
+
+    // Clear map with elements
+    rhhashmap_clear(&map);
+    assert_int_equal(map.len, 0);
+    assert_int_equal(map.cap, cap_before);
+
+    // Verify elements are gone
+    int out;
+    assert_false(rhhashmap_get_typed(&out, &map, "key_0"));
+
+    rhhashmap_destroy(&map);
+}
+
+static void test_rhhashmap_clear_reinsert(void **state) {
+    (void) state;
+    rhhashmap_t map;
+    assert_true(rhhashmap_create(&map));
+
+    // Insert and clear
+    const int val = 42;
+    rhhashmap_insert_typed(&map, "key", val);
+    rhhashmap_clear(&map);
+
+    // Verify we can insert again
+    const int new_val = 100;
+    assert_true(rhhashmap_insert_typed(&map, "new_key", new_val));
+    assert_int_equal(map.len, 1);
+    int out;
+    assert_true(rhhashmap_get_typed(&out, &map, "new_key"));
+    assert_int_equal(out, 100);
+
+    rhhashmap_destroy(&map);
+}
+
 static bool foreach_callback_count(const char *key, const void *value, void *ctx) {
     (void) key;
     (void) value;
@@ -293,12 +434,22 @@ static void test_rhhashmap_foreach_verify(void **state) {
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_rhhashmap_create_destroy),
+        cmocka_unit_test(test_rhhashmap_create_with_capacity_min_clamp),
+        cmocka_unit_test(test_rhhashmap_create_with_capacity_pow2_rounding),
+        cmocka_unit_test(test_rhhashmap_create_with_capacity_exact_pow2),
+        cmocka_unit_test(test_rhhashmap_create_with_capacity_exceed_max),
+        cmocka_unit_test(test_rhhashmap_reserve_increase),
+        cmocka_unit_test(test_rhhashmap_reserve_smaller_ignored),
+        cmocka_unit_test(test_rhhashmap_reserve_with_data),
+        cmocka_unit_test(test_rhhashmap_reserve_exceed_max),
         cmocka_unit_test(test_rhhashmap_insert_get_basic),
         cmocka_unit_test(test_rhhashmap_insert_update),
         cmocka_unit_test(test_rhhashmap_remove_basic),
         cmocka_unit_test(test_rhhashmap_resize),
         cmocka_unit_test(test_rhhashmap_collisions_and_psl_swap),
         cmocka_unit_test(test_rhhashmap_large_insert_remove),
+        cmocka_unit_test(test_rhhashmap_clear_with_data),
+        cmocka_unit_test(test_rhhashmap_clear_reinsert),
         cmocka_unit_test(test_rhhashmap_foreach_basic),
         cmocka_unit_test(test_rhhashmap_foreach_early_stop),
         cmocka_unit_test(test_rhhashmap_foreach_verify),
