@@ -251,10 +251,10 @@ static void test_rhhashmap_foreach_early_stop(void **state) {
 typedef struct {
     int count;
     bool seen[100];
-} ForeachCtx;
+} foreach_ctx_t;
 
 static bool foreach_callback_verify(const char *key, const void *value, void *ctx) {
-    ForeachCtx *fctx = ctx;
+    foreach_ctx_t *fctx = ctx;
     fctx->count++;
     const int val = *(const int *) value;
     if (val >= 0 && val < 100) {
@@ -280,7 +280,7 @@ static void test_rhhashmap_foreach_verify(void **state) {
     }
 
     // Use callback to check all keys and values
-    ForeachCtx fctx = {0, false};
+    foreach_ctx_t fctx = {0, false};
     rhhashmap_foreach(&map, foreach_callback_verify, &fctx);
     assert_int_equal(fctx.count, n);
     for (int i = 0; i < n; i++) {

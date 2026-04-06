@@ -12,13 +12,13 @@
 #define rhhashmap_get_typed(out, map, key) \
     rhhashmap_get(out, sizeof(*(out)), map, key)
 
-typedef struct rhhashmap_entry_t {
+typedef struct {
     char *key;
     void *value;
     int psl;
 } rhhashmap_entry_t;
 
-typedef struct rhhashmap_t {
+typedef struct {
     rhhashmap_entry_t *table;
     size_t len;
     size_t cap;
