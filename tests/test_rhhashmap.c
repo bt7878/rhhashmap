@@ -1,7 +1,7 @@
 #include "../src/rhhashmap.h"
 
-#include <cmocka.h>
 #include <stdio.h>
+#include <cmocka.h>
 
 static void test_rhhashmap_create_destroy(void **state) {
     (void) state;
@@ -183,20 +183,21 @@ static void test_rhhashmap_resize(void **state) {
     rhhashmap_t map;
     assert_true(rhhashmap_create(&map));
     const size_t initial_cap = map.cap;
+    const int count = (int) ((double) initial_cap * RHHASHMAP_LOAD_FACTOR) + 1;
 
     // Insert enough elements to trigger a resize
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < count; i++) {
         char key[16];
         snprintf(key, sizeof(key), "key_%d", i);
         assert_true(rhhashmap_insert_typed(&map, key, i));
     }
 
-    assert_int_equal(map.len, 15);
+    assert_int_equal(map.len, count);
     assert_true(map.cap > initial_cap);
     assert_int_equal(map.cap, initial_cap * 2);
 
     // Verify all elements are still there
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < count; i++) {
         char key[16];
         snprintf(key, sizeof(key), "key_%d", i);
         int out_val;

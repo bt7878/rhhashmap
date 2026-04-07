@@ -1,10 +1,10 @@
 #include "rhhashmap.h"
-#include "hash.h"
 
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <rapidhash.h>
 
 static size_t next_pow2(size_t n) {
     n--;
@@ -15,9 +15,9 @@ static size_t next_pow2(size_t n) {
     return n + 1;
 }
 
-static void insert(rhhashmap_t *map, char *key, void *value) {
-    rhhashmap_entry_t to_insert = {key, value, 0};
-    size_t i = hash(key, map->cap);
+static void insert(rhhashmap_t *map, char *key, void *value, const size_t hash) {
+    rhhashmap_entry_t to_insert = {key, value, hash, 0};
+    size_t i = hash & (map->cap - 1);
 
     while (true) {
         rhhashmap_entry_t *entry = &map->table[i];
@@ -28,10 +28,10 @@ static void insert(rhhashmap_t *map, char *key, void *value) {
             return;
         }
 
-        if (strcmp(entry->key, to_insert.key) == 0) {
-            free(entry->value);
+        if (entry->hash == to_insert.hash && !strcmp(entry->key, to_insert.key)) {
+            free(entry->key);
+            entry->key = to_insert.key;
             entry->value = to_insert.value;
-            free(to_insert.key);
             return;
         }
 
@@ -41,14 +41,15 @@ static void insert(rhhashmap_t *map, char *key, void *value) {
             to_insert = tmp;
         }
 
-        i = (i + 1) % map->cap;
+        i = (i + 1) & (map->cap - 1);
         to_insert.psl++;
     }
 }
 
 static bool get_index(size_t *out, const rhhashmap_t *map, const char *key) {
-    size_t i = hash(key, map->cap);
-    int psl = 0;
+    const size_t hash = (size_t) rapidhash(key, strlen(key));
+    size_t i = hash & (map->cap - 1);
+    size_t psl = 0;
 
     while (true) {
         const rhhashmap_entry_t *entry = &map->table[i];
@@ -56,12 +57,12 @@ static bool get_index(size_t *out, const rhhashmap_t *map, const char *key) {
         if (!entry->key || psl > entry->psl) {
             return false;
         }
-        if (strcmp(entry->key, key) == 0) {
+        if (entry->hash == hash && !strcmp(entry->key, key)) {
             *out = i;
             return true;
         }
 
-        i = (i + 1) % map->cap;
+        i = (i + 1) & (map->cap - 1);
         psl++;
     }
 }
@@ -97,7 +98,7 @@ static bool resize(rhhashmap_t *map, const size_t cap) {
 
     for (size_t i = 0; i < old_cap; i++) {
         if (old_table[i].key) {
-            insert(map, old_table[i].key, old_table[i].value);
+            insert(map, old_table[i].key, old_table[i].value, old_table[i].hash);
         }
     }
     free(old_table);
@@ -121,7 +122,6 @@ bool rhhashmap_create_with_capacity(rhhashmap_t *map, size_t cap) {
 void rhhashmap_destroy(const rhhashmap_t *map) {
     for (size_t i = 0; i < map->cap; i++) {
         free(map->table[i].key);
-        free(map->table[i].value);
     }
     free(map->table);
 }
@@ -137,20 +137,17 @@ bool rhhashmap_reserve(rhhashmap_t *map, size_t cap) {
 
 bool rhhashmap_insert(rhhashmap_t *map, const char *key, const void *value, const size_t value_size) {
     const size_t key_size = strlen(key) + 1;
-    char *key_owned = malloc(key_size);
+
+    char *key_owned = malloc(key_size + value_size);
     if (!key_owned) {
         return false;
     }
-    memcpy(key_owned, key, key_size);
+    void *value_owned = key_owned + key_size;
 
-    void *value_owned = malloc(value_size);
-    if (!value_owned) {
-        free(key_owned);
-        return false;
-    }
+    memcpy(key_owned, key, key_size);
     memcpy(value_owned, value, value_size);
 
-    insert(map, key_owned, value_owned);
+    insert(map, key_owned, value_owned, (size_t) rapidhash(key_owned, key_size - 1));
     if ((double) map->len / (double) map->cap > RHHASHMAP_LOAD_FACTOR) {
         if (map->cap >= RHHASHMAP_MAX_CAPACITY || !resize(map, map->cap * 2)) {
             rhhashmap_remove(map, key);
@@ -178,10 +175,9 @@ bool rhhashmap_remove(rhhashmap_t *map, const char *key) {
     }
 
     free(map->table[i].key);
-    free(map->table[i].value);
 
     while (true) {
-        const size_t next_i = (i + 1) % map->cap;
+        const size_t next_i = (i + 1) & (map->cap - 1);
         rhhashmap_entry_t *cur = &map->table[i];
         const rhhashmap_entry_t *next = &map->table[next_i];
 
@@ -200,7 +196,6 @@ bool rhhashmap_remove(rhhashmap_t *map, const char *key) {
 void rhhashmap_clear(rhhashmap_t *map) {
     for (size_t i = 0; i < map->cap; i++) {
         free(map->table[i].key);
-        free(map->table[i].value);
         map->table[i] = (rhhashmap_entry_t){0};
     }
     map->len = 0;

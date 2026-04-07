@@ -6,8 +6,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 add_library(rhhashmap STATIC src/rhhashmap.c
-        src/hash.c
-        src/hash.h)
+)
 
 if (MSVC)
     target_compile_options(rhhashmap PRIVATE /W4 /WX)

@@ -17,7 +17,8 @@
 typedef struct {
     char *key;
     void *value;
-    int psl;
+    size_t hash;
+    size_t psl;
 } rhhashmap_entry_t;
 
 typedef struct {
