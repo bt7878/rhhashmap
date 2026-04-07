@@ -5,7 +5,8 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
-add_library(rhhashmap STATIC src/rhhashmap.c
+add_library(rhhashmap STATIC
+        src/rhhashmap.c
 )
 
 if (MSVC)
@@ -45,7 +46,9 @@ if (BUILD_TESTING)
     FetchContent_MakeAvailable(cmocka)
 
     add_executable(test_rhhashmap
-            tests/test_rhhashmap.c)
+            tests/test_rhhashmap.c
+    )
+
     target_link_libraries(test_rhhashmap PRIVATE rhhashmap cmocka)
     add_custom_command(TARGET test_rhhashmap POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
